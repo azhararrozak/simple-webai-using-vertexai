@@ -3,7 +3,7 @@ const { GoogleGenAI } = require("@google/genai");
 const dotenv = require("dotenv");
 const fs = require("fs");
 const path = require("path");
-const { Readable, finished } = require("stream");
+const textToSpeech = require("@google-cloud/text-to-speech");
 
 dotenv.config();
 
@@ -13,6 +13,10 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
 
+// Initialize Google Text-to-Speech client
+const client = new textToSpeech.TextToSpeechClient();
+
+// Initialize Google GenAI client
 const ai = new GoogleGenAI({
     vertexai: process.env.GOOGLE_GENAI_USE_VERTEXAI,
     project: process.env.GOOGLE_GENAI_PROJECT_ID,
@@ -125,6 +129,50 @@ app.post("/veo", async (req, res) => {
     } catch (error) {
         console.error("Error generating video:", error);
         res.status(500).json({ error: "Failed to generate video" });
+    }
+})
+
+app.post("/tts", async (req, res) => {
+    const { text, languageCode = "id-ID" } = req.body;
+
+    if (!text) {
+        return res.status(400).json({ error: "Text is required" });
+    }
+
+    try {
+        const request = {
+          input: { text: text },
+          voice: {
+            languageCode: languageCode,
+            name: "id-ID-Chirp3-HD-Sulafat",
+            ssmlGender: "FEMALE",
+          },
+          audioConfig: { audioEncoding: "MP3" },
+        };
+
+        const [response] = await client.synthesizeSpeech(request);
+        const audioContent = response.audioContent;
+
+        // Create a timestamp-based filename
+        const timestamp = Date.now();
+        const filename = `tts_audio_${timestamp}.mp3`;
+        // Define the file path
+        const filePath = path.join(__dirname, "public", filename);
+        // Write the audio content to a file
+        fs.writeFileSync(filePath, audioContent);
+
+        res.json({ audioUrl: `/public/${filename}` });
+
+        // const request = {
+        // };
+
+        // const response = await client.listVoices(request);
+
+        // res.json(response);
+
+    } catch (error) {
+        console.error("Error generating speech:", error);
+        res.status(500).json({ error: "Failed to generate speech" });
     }
 })
 
