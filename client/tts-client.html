@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Text-to-Speech Streaming</title>
+    <!-- Memuat Tailwind CSS untuk styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5; /* Warna latar belakang lembut */
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md space-y-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800">Suara Loket Digital</h1>
+        <p class="text-center text-gray-600">Masukkan teks yang ingin diubah menjadi suara.</p>
+
+        <!-- Area input teks -->
+        <div>
+            <label for="textInput" class="block text-sm font-medium text-gray-700 mb-1">Teks:</label>
+            <textarea id="textInput" 
+                      class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm resize-y" 
+                      rows="4" 
+                      placeholder="Contoh: 'Nomor antrean 123, menuju loket A.'"></textarea>
+        </div>
+
+        <!-- Pemilihan Bahasa (opsional, bisa diubah sesuai kebutuhan) -->
+        <div>
+            <label for="languageSelect" class="block text-sm font-medium text-gray-700 mb-1">Bahasa:</label>
+            <select id="languageSelect" 
+                    class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <option value="id-ID" selected>Bahasa Indonesia (id-ID)</option>
+                <option value="en-US">English (en-US)</option>
+                <option value="ja-JP">日本語 (ja-JP)</option>
+                <option value="ko-KR">한국어 (ko-KR)</option>
+                <!-- Tambahkan lebih banyak pilihan bahasa jika diinginkan -->
+            </select>
+        </div>
+
+        <!-- Tombol untuk memutar suara -->
+        <button id="speakButton" 
+                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out transform hover:scale-105 active:scale-100">
+            Putar Suara
+        </button>
+
+        <!-- Area untuk menampilkan status atau pesan error -->
+        <div id="status" class="text-center text-sm font-medium text-gray-500"></div>
+
+        <!-- Elemen audio untuk memutar suara (tersembunyi secara default) -->
+        <audio id="audioPlayer" controls class="w-full mt-4 hidden"></audio>
+    </div>
+
+    <script>
+        const textInput = document.getElementById('textInput');
+        const languageSelect = document.getElementById('languageSelect');
+        const speakButton = document.getElementById('speakButton');
+        const statusDiv = document.getElementById('status');
+        const audioPlayer = document.getElementById('audioPlayer');
+
+        speakButton.addEventListener('click', async () => {
+            const text = textInput.value.trim(); // Ambil teks dan hapus spasi di awal/akhir
+            const languageCode = languageSelect.value; // Ambil kode bahasa yang dipilih
+
+            if (!text) {
+                statusDiv.textContent = "Error: Silakan masukkan teks yang ingin disuarakan.";
+                statusDiv.style.color = "red";
+                return;
+            }
+
+            statusDiv.textContent = "Membuat suara...";
+            statusDiv.style.color = "#4f46e5"; // Warna biru indigo
+            speakButton.disabled = true; // Nonaktifkan tombol selama proses
+            audioPlayer.src = ''; // Bersihkan src audio sebelumnya
+            audioPlayer.classList.add('hidden'); // Sembunyikan player
+            audioPlayer.pause(); // Hentikan pemutaran sebelumnya
+
+            try {
+                // Mengirim permintaan POST ke server Express Anda
+                const response = await fetch('http://localhost:3000/tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        languageCode: languageCode,
+                    })
+                });
+
+                if (!response.ok) {
+                    // Jika server Express mengirimkan JSON error, parse sebagai JSON
+                    // Jika server hanya mengirim plain text error, gunakan response.text()
+                    const errorData = await response.json(); 
+                    throw new Error(errorData.error || `Gagal mengambil audio: ${response.status}`);
+                }
+
+                // Dapatkan respons sebagai Blob (karena server mengirim biner MP3)
+                const audioBlob = await response.blob();
+                
+                // Buat URL objek dari Blob
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // Set URL ke elemen audio dan putar
+                audioPlayer.src = audioUrl;
+                audioPlayer.classList.remove('hidden'); // Tampilkan player
+                await audioPlayer.play(); // Menggunakan await play() untuk menangani Promise
+
+                statusDiv.textContent = "Suara sedang diputar...";
+                statusDiv.style.color = "#10b981"; // Warna hijau emerald
+
+                // Event listener saat audio selesai diputar
+                audioPlayer.onended = () => {
+                    URL.revokeObjectURL(audioUrl); // Penting: Hapus URL objek untuk membersihkan memori
+                    statusDiv.textContent = "Selesai.";
+                    statusDiv.style.color = "#4b5563"; // Warna abu-abu gelap
+                    speakButton.disabled = false; // Aktifkan kembali tombol
+                    audioPlayer.classList.add('hidden'); // Sembunyikan player kembali
+                };
+                
+                // Event listener jika ada error saat memutar audio
+                audioPlayer.onerror = (e) => {
+                    console.error("Audio playback error:", e);
+                    statusDiv.textContent = "Error saat memutar audio. Coba lagi.";
+                    statusDiv.style.color = "red";
+                    URL.revokeObjectURL(audioUrl); // Bersihkan URL meskipun error
+                    speakButton.disabled = false;
+                    audioPlayer.classList.add('hidden');
+                };
+
+            } catch (error) {
+                console.error('Terjadi kesalahan saat memproses suara:', error);
+                statusDiv.textContent = `Terjadi kesalahan: ${error.message}. Pastikan server berjalan.`;
+                statusDiv.style.color = "red";
+                speakButton.disabled = false; // Aktifkan kembali tombol
+                audioPlayer.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
