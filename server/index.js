@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const fs = require("fs");
 const path = require("path");
 const textToSpeech = require("@google-cloud/text-to-speech");
+const cors = require("cors");
 
 dotenv.config();
 
@@ -12,6 +13,11 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use("/public", express.static(path.join(__dirname, "public")));
+app.use(cors(
+    {
+        origin: '*', // Allow all origins for development, adjust as needed for production
+    }
+));
 
 // Initialize Google Text-to-Speech client
 const client = new textToSpeech.TextToSpeechClient();
@@ -153,15 +159,23 @@ app.post("/tts", async (req, res) => {
         const [response] = await client.synthesizeSpeech(request);
         const audioContent = response.audioContent;
 
-        // Create a timestamp-based filename
-        const timestamp = Date.now();
-        const filename = `tts_audio_${timestamp}.mp3`;
-        // Define the file path
-        const filePath = path.join(__dirname, "public", filename);
-        // Write the audio content to a file
-        fs.writeFileSync(filePath, audioContent);
+        // stream the audio content to the client
+        res.set('Content-Type', 'audio/mpeg');
 
-        res.json({ audioUrl: `/public/${filename}` });
+        res.send(audioContent);
+
+        console.log("Audio content written to file");
+
+        // Create a timestamp-based filename and save the audio file
+        
+        // const timestamp = Date.now();
+        // const filename = `tts_audio_${timestamp}.mp3`;
+        // // Define the file path
+        // const filePath = path.join(__dirname, "public", filename);
+        // // Write the audio content to a file
+        // fs.writeFileSync(filePath, audioContent);
+
+        // res.json({ audioUrl: `/public/${filename}` });
 
         // const request = {
         // };
