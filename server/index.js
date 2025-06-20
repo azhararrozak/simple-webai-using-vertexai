@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const fs = require("fs");
 const path = require("path");
 const textToSpeech = require("@google-cloud/text-to-speech");
+const speech = require("@google-cloud/speech");
 const cors = require("cors");
 
 dotenv.config();
@@ -21,6 +22,9 @@ app.use(cors(
 
 // Initialize Google Text-to-Speech client
 const client = new textToSpeech.TextToSpeechClient();
+
+// Initialize Google Speech-to-Text client
+const speechClient = new speech.SpeechClient();
 
 // Initialize Google GenAI client
 const ai = new GoogleGenAI({
@@ -167,16 +171,15 @@ app.post("/tts", async (req, res) => {
         console.log("Audio content written to file");
 
         // Create a timestamp-based filename and save the audio file
-        
         // const timestamp = Date.now();
         // const filename = `tts_audio_${timestamp}.mp3`;
         // // Define the file path
         // const filePath = path.join(__dirname, "public", filename);
         // // Write the audio content to a file
         // fs.writeFileSync(filePath, audioContent);
-
         // res.json({ audioUrl: `/public/${filename}` });
 
+        //testing list voices
         // const request = {
         // };
 
@@ -189,6 +192,46 @@ app.post("/tts", async (req, res) => {
         res.status(500).json({ error: "Failed to generate speech" });
     }
 })
+
+app.post("/speechtotext", async (req, res) => {
+
+    try{
+        const audioFilePath = path.join(
+          __dirname,
+          "public",
+          "tts_audio_1750425735369.mp3"
+        );
+
+        const config = {
+          encoding: "MP3",
+          sampleRateHertz: 44100,
+          languageCode: "id-ID",
+        };
+
+        const audio = {
+          content: fs.readFileSync(audioFilePath).toString('base64'),
+        };
+
+        const request = {
+          config: config,
+          audio: audio,
+        };
+
+        const [response] = await speechClient.recognize(request);
+        const transcription = response.results
+          .map(result => result.alternatives[0].transcript)
+            .join("\n");
+        
+        res.json({ transcription: transcription });
+    }
+    catch (error) {
+        console.error("Error processing audio:", error);
+        res.status(500).json({ error: "Failed to process audio" });
+    }
+
+    
+});
+
 
 
 app.listen(port, () => {
