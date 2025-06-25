@@ -143,5 +143,8 @@ server/.env
 server/key.json
 server/.env.local
 server/public/
+server/outputs/
+server/temp/
+server/logs/
 server/key.json
 server/.DS_Store

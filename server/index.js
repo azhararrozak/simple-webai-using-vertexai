@@ -6,19 +6,35 @@ const path = require("path");
 const textToSpeech = require("@google-cloud/text-to-speech");
 const speech = require("@google-cloud/speech");
 const cors = require("cors");
+const videoProcessingRoutes = require("./src/routes/videoProcessingRoutes.js");
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Create necessary directories if they don't exist
+const uploadDir = path.join(__dirname, 'uploads');
+const outputDir = path.join(__dirname, 'outputs');
+const tempDir = path.join(__dirname, 'temp');
+
+[uploadDir, outputDir, tempDir].forEach(dir => {
+    if (!require('fs').existsSync(dir)) {
+        require('fs').mkdirSync(dir, { recursive: true });
+    }
+});
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use("/public", express.static(path.join(__dirname, "public")));
+app.use("/outputs", express.static(outputDir));
 app.use(cors(
     {
         origin: '*', // Allow all origins for development, adjust as needed for production
     }
 ));
+
+app.use("/api", videoProcessingRoutes);
 
 // Initialize Google Text-to-Speech client
 const client = new textToSpeech.TextToSpeechClient();
@@ -65,6 +81,10 @@ app.post("/imagen", async (req, res) => {
         const response = await ai.models.generateImages({
             model: "imagen-4.0-generate-preview-06-06",
             prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                aspectRatio: "9:16",
+            }
         });
 
         const base64 = response.generatedImages[0].image.imageBytes;
@@ -232,7 +252,8 @@ app.post("/speechtotext", async (req, res) => {
     
 });
 
-
+// Generate video and edit ffmpeg
+app.use("/outputs", express.static(outputDir));
 
 app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
